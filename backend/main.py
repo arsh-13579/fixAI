@@ -13,7 +13,10 @@ import sqlite3
 import bcrypt
 from datetime import datetime, timedelta
 from typing import Optional, List
-
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from fastapi import Request
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -52,9 +55,13 @@ DB_PATH      = "fixAI.db"
 # ─────────────────────────────────────────────────────────
 app = FastAPI(title="fixAI API", version="1.0.0")
 
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -214,7 +221,8 @@ def register(body: UserRegister, db: sqlite3.Connection = Depends(get_db)):
 
 
 @app.post("/auth/login", response_model=Token)
-def login(form: OAuth2PasswordRequestForm = Depends(), db: sqlite3.Connection = Depends(get_db)):
+@limiter.limit("5/minute")
+def login(request: Request, form: OAuth2PasswordRequestForm = Depends(), db: sqlite3.Connection = Depends(get_db)):
     username = form.username.strip()
     row = db.execute(
         "SELECT * FROM users WHERE username = ?", (username,)
