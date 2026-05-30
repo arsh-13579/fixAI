@@ -1,0 +1,6 @@
+backend/.env
+backend/fixAI.db
+backend/__pycache__/
+frontend/serve.py
+backend/__pycache__/
+*.pyc
